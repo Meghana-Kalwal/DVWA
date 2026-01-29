@@ -18,7 +18,14 @@ jobs:
         run: |
           curl -L https://github.com/opengrep/opengrep/releases/latest/download/opengrep-linux-amd64 -o opengrep
           chmod +x opengrep
-
+          
       - name: Run OpenGrep scan
         run: |
-          ./opengrep scan --config auto .
+          ./opengrep scan --config auto --json . > opengrep-results.json
+
+      - name: Upload results
+        uses: actions/upload-artifact@v4
+        with:
+          name: opengrep-results
+          path: opengrep-results.json
+
