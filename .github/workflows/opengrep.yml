@@ -1,0 +1,24 @@
+name: OpenGrep Security Scan
+
+on:
+  push:
+    branches: [ "master", "main" ]
+  pull_request:
+    branches: [ "master", "main" ]
+
+jobs:
+  opengrep-scan:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download OpenGrep
+        run: |
+          curl -L https://github.com/opengrep/opengrep/releases/latest/download/opengrep-linux-amd64 -o opengrep
+          chmod +x opengrep
+
+      - name: Run OpenGrep scan
+        run: |
+          ./opengrep scan --config auto .
