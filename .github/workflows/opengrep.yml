@@ -18,6 +18,7 @@ jobs:
         run: |
           curl -L https://github.com/opengrep/opengrep/releases/latest/download/opengrep-linux-amd64 -o opengrep
           chmod +x opengrep
+          sudo mv opengrep /usr/local/bin/opengrep
           
       - name: Run OpenGrep scan
         run: |
