@@ -18,15 +18,12 @@ jobs:
         run: |
           curl -L https://github.com/opengrep/opengrep/releases/latest/download/opengrep-linux-amd64 -o opengrep
           chmod +x opengrep
-          sudo mv opengrep /usr/local/bin/opengrep
-          
-      - name: Run OpenGrep scan
+
+      - name: Run OpenGrep scan (SARIF)
         run: |
-          ./opengrep scan --config auto --json . > opengrep-results.json
+          ./opengrep scan --config p/security-audit --sarif . > opengrep.sarif
 
-      - name: Upload results
-        uses: actions/upload-artifact@v4
+      - name: Upload SARIF to GitHub Security Dashboard
+        uses: github/codeql-action/upload-sarif@v3
         with:
-          name: opengrep-results
-          path: opengrep-results.json
-
+          sarif_file: opengrep.sarif
