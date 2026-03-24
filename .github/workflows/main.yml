@@ -1,0 +1,26 @@
+name: DVWA ZAP Scan
+
+on:
+  push:
+    branches: ["main"]
+
+jobs:
+  zap_scan:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v3
+
+    - name: Run DVWA using Docker
+      run: |
+        docker run -d -p 8080:80 vulnerables/web-dvwa
+
+    - name: Wait for DVWA to start
+      run: sleep 20
+
+    - name: Run OWASP ZAP Scan
+      uses: zaproxy/action-full-scan@v0.10.0
+      with:
+        target: 'http://localhost:8080'
+        cmd_options: '-a'
