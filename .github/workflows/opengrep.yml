@@ -1,3 +1,4 @@
+
 name: OpenGrep Security Scan
 
 on:
@@ -18,11 +19,9 @@ jobs:
         run: |
           curl -L https://github.com/opengrep/opengrep/releases/latest/download/opengrep-linux-amd64 -o opengrep
           chmod +x opengrep
-
       - name: Run OpenGrep scan (SARIF)
         run: |
           ./opengrep scan --config p/security-audit --sarif . > opengrep.sarif
-
       - name: Upload SARIF to GitHub Security Dashboard
         uses: github/codeql-action/upload-sarif@v3
         with:
