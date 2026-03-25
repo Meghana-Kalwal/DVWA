@@ -1,0 +1,90 @@
+{
+  "pipeline_run_id": "23526410508",
+  "pipeline_run_number": "1",
+  "commit": "066ed68b51994989c15fe3b7a1e227ca631e2589",
+  "ref": "refs/heads/master",
+  "timestamp": "2026-03-25T05:34:39Z",
+  "repository": "https://github.com/Meghana-Kalwal/DVWA",
+  "tools": {
+    "semgrep": {
+      "tool": "semgrep",
+      "tool_type": "SAST",
+      "scan_start": "2026-03-25T05:27:50Z",
+      "scan_end": "2026-03-25T05:28:24Z",
+      "ttd_seconds": 34,
+      "total_findings": 77,
+      "critical": 52,
+      "high": 25,
+      "rulesets": [
+        "p/php",
+        "p/owasp-top-ten",
+        "p/security-audit",
+        "p/secrets"
+      ],
+      "run_id": "23526410508",
+      "commit": "066ed68b51994989c15fe3b7a1e227ca631e2589"
+    },
+    "sonarcloud": {
+      "tool": "sonarcloud",
+      "tool_type": "SAST",
+      "scan_start": "2026-03-25T05:27:49Z",
+      "scan_end": "2026-03-25T05:27:59Z",
+      "ttd_seconds": 10,
+      "status": "failed_or_skipped",
+      "dashboard_url": "https://sonarcloud.io/project/overview?id=",
+      "note": "Detailed results visible in SonarCloud dashboard",
+      "run_id": "23526410508",
+      "commit": "066ed68b51994989c15fe3b7a1e227ca631e2589"
+    },
+    "owasp_zap": {
+      "tool": "owasp_zap",
+      "tool_type": "DAST",
+      "target": "http://localhost:4280",
+      "scan_start": "2026-03-25T05:28:39Z",
+      "scan_end": "2026-03-25T05:34:26Z",
+      "ttd_seconds": 347,
+      "total_findings": 35,
+      "high": 0,
+      "medium": 8,
+      "low": 12,
+      "scan_mode": "full-scan",
+      "run_id": "23526410508",
+      "commit": "066ed68b51994989c15fe3b7a1e227ca631e2589"
+    },
+    "w3af": {
+      "tool": "w3af",
+      "tool_type": "DAST",
+      "target": "http://localhost:4280/",
+      "scan_start": "2026-03-25T05:28:38Z",
+      "scan_end": "2026-03-25T05:29:01Z",
+      "ttd_seconds": 23,
+      "total_findings": 0,
+      "scan_status": "success",
+      "plugins": [
+        "sqli",
+        "xss",
+        "os_commanding",
+        "lfi",
+        "rfi",
+        "file_upload",
+        "csrf",
+        "xpath",
+        "xxe"
+      ],
+      "note": "w3af may timeout on large applications; results represent partial or full scan",
+      "run_id": "23526410508",
+      "commit": "066ed68b51994989c15fe3b7a1e227ca631e2589"
+    }
+  },
+  "aggregated": {
+    "total_findings_all_tools": 112,
+    "ttd_by_tool_seconds": {
+      "semgrep": 34,
+      "sonarcloud": 10,
+      "owasp_zap": 347,
+      "w3af": 23
+    },
+    "fastest_tool": "sonarcloud",
+    "slowest_tool": "owasp_zap"
+  }
+}
