@@ -17,8 +17,12 @@ jobs:
 
       - name: Download OpenGrep
         run: |
-          curl -L https://github.com/opengrep/opengrep/releases/latest/download/opengrep-linux-amd64 -o opengrep
+          curl -L https://github.com/opengrep/opengrep/releases/latest/download/opengrep-linux-x86_64 -o opengrep
           chmod +x opengrep
+
+      - name: Check OpenGrep
+        run: file ./opengrep
+
       - name: Run OpenGrep scan (SARIF)
         run: |
           ./opengrep scan --config p/security-audit --sarif . > opengrep.sarif
