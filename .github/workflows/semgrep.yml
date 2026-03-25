@@ -1,26 +1,163 @@
+name: "SAST - Semgrep"
+
 on:
-  workflow_dispatch: {}
-  pull_request: {}
   push:
-    branches:
-    - main
-    - master
-    paths:
-    - .github/workflows/semgrep.yml
+    branches: ["master", "main"]
+  pull_request:
+    branches: ["master", "main"]
+  workflow_dispatch: {}
+  workflow_call: {}
   schedule:
-  # random HH:MM to avoid a load spike on GitHub Actions at 00:00
-  - cron: 15 1 * * *
-name: Semgrep
+    - cron: "30 2 * * *"
+
 jobs:
   semgrep:
-    name: semgrep/ci
+    name: "Semgrep SAST Scan"
     runs-on: ubuntu-latest
     permissions:
       contents: read
-    env:
-      SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }}
-    container:
-      image: semgrep/semgrep
+      security-events: write
+      actions: read
+
     steps:
-    - uses: actions/checkout@v4
-    - run: semgrep ci
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Record scan start time
+        id: start_time
+        run: |
+          START=$(date +%s)
+          echo "start=$START" >> $GITHUB_OUTPUT
+          echo "start_human=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $GITHUB_OUTPUT
+          echo "📊 Semgrep scan started at: $(date -u)"
+
+      - name: Run Semgrep SAST (JSON output)
+        id: semgrep_json
+        run: |
+          pip install semgrep --quiet
+          semgrep scan \
+            --config=p/php \
+            --config=p/owasp-top-ten \
+            --config=p/security-audit \
+            --config=p/secrets \
+            --config=p/default \
+            --json \
+            --output=semgrep-results.json \
+            --no-error \
+            . || true
+          echo "✅ Semgrep JSON scan completed"
+
+      - name: Run Semgrep SAST (SARIF output)
+        id: semgrep_sarif
+        run: |
+          semgrep scan \
+            --config=p/php \
+            --config=p/owasp-top-ten \
+            --config=p/security-audit \
+            --config=p/secrets \
+            --config=p/default \
+            --sarif \
+            --output=semgrep-results.sarif \
+            --no-error \
+            . || true
+          echo "✅ Semgrep SARIF scan completed"
+
+      - name: Record scan end time and compute metrics
+        id: end_time
+        run: |
+          END=$(date +%s)
+          START=${{ steps.start_time.outputs.start }}
+          TTD=$((END - START))
+          echo "end=$END" >> $GITHUB_OUTPUT
+          echo "ttd=$TTD" >> $GITHUB_OUTPUT
+          echo "end_human=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $GITHUB_OUTPUT
+          echo "⏱️  Semgrep TTD: ${TTD} seconds"
+
+      - name: Parse and summarize results
+        id: parse
+        run: |
+          if [ -f semgrep-results.json ]; then
+            TOTAL=$(python3 -c "
+          import json, sys
+          try:
+              data = json.load(open('semgrep-results.json'))
+              results = data.get('results', [])
+              print(len(results))
+          except Exception as e:
+              print(0)
+          ")
+            CRITICAL=$(python3 -c "
+          import json
+          try:
+              data = json.load(open('semgrep-results.json'))
+              count = sum(1 for r in data.get('results', []) if r.get('extra', {}).get('severity', '').lower() == 'error')
+              print(count)
+          except: print(0)
+          ")
+            HIGH=$(python3 -c "
+          import json
+          try:
+              data = json.load(open('semgrep-results.json'))
+              count = sum(1 for r in data.get('results', []) if r.get('extra', {}).get('severity', '').lower() == 'warning')
+              print(count)
+          except: print(0)
+          ")
+            echo "total=$TOTAL" >> $GITHUB_OUTPUT
+            echo "critical=$CRITICAL" >> $GITHUB_OUTPUT
+            echo "high=$HIGH" >> $GITHUB_OUTPUT
+            echo "📊 Total findings: $TOTAL (Critical: $CRITICAL, High: $HIGH)"
+          else
+            echo "total=0" >> $GITHUB_OUTPUT
+            echo "critical=0" >> $GITHUB_OUTPUT
+            echo "high=0" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Generate Semgrep metrics JSON
+        run: |
+          cat > semgrep-metrics.json << EOF
+          {
+            "tool": "semgrep",
+            "tool_type": "SAST",
+            "scan_start": "${{ steps.start_time.outputs.start_human }}",
+            "scan_end": "${{ steps.end_time.outputs.end_human }}",
+            "ttd_seconds": ${{ steps.end_time.outputs.ttd }},
+            "total_findings": ${{ steps.parse.outputs.total }},
+            "critical": ${{ steps.parse.outputs.critical }},
+            "high": ${{ steps.parse.outputs.high }},
+            "rulesets": ["p/php", "p/owasp-top-ten", "p/security-audit", "p/secrets"],
+            "run_id": "${{ github.run_id }}",
+            "commit": "${{ github.sha }}"
+          }
+          EOF
+          echo "=== SEMGREP METRICS ==="
+          cat semgrep-metrics.json
+
+      - name: Upload SARIF to GitHub Security tab
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: semgrep-results.sarif
+          category: semgrep
+        continue-on-error: true
+
+      - name: Upload Semgrep JSON results artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: semgrep-results-${{ github.run_id }}
+          path: |
+            semgrep-results.json
+            semgrep-results.sarif
+            semgrep-metrics.json
+          retention-days: 30
+
+      - name: Print summary
+        run: |
+          echo "## 🔍 Semgrep SAST Results" >> $GITHUB_STEP_SUMMARY
+          echo "| Metric | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Total Findings | ${{ steps.parse.outputs.total }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Critical (Error) | ${{ steps.parse.outputs.critical }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| High (Warning) | ${{ steps.parse.outputs.high }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Time to Detect | ${{ steps.end_time.outputs.ttd }} seconds |" >> $GITHUB_STEP_SUMMARY
+          echo "| Rulesets | p/php, p/owasp-top-ten, p/security-audit, p/secrets |" >> $GITHUB_STEP_SUMMARY

@@ -1,0 +1,172 @@
+name: "🔐 Security Pipeline — Full Scan"
+
+on:
+  push:
+    branches: ["master", "main"]
+  workflow_dispatch:
+    inputs:
+      run_dast:
+        description: "Run DAST tools (ZAP + w3af)? Takes ~45 mins"
+        required: false
+        default: "true"
+        type: choice
+        options: ["true", "false"]
+  schedule:
+    - cron: "0 2 * * 1"
+
+jobs:
+  # ─────────────────────────────────────────────
+  # STAGE 1: SAST — Run in PARALLEL
+  # ─────────────────────────────────────────────
+  sast-semgrep:
+    name: "SAST: Semgrep"
+    uses: ./.github/workflows/semgrep.yml
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+
+  sast-sonarcloud:
+    name: "SAST: SonarCloud"
+    uses: ./.github/workflows/sast-sonarcloud.yml
+    secrets: inherit
+    permissions:
+      contents: read
+      security-events: write
+
+  # ─────────────────────────────────────────────
+  # STAGE 2: DAST — Run after SAST (in parallel)
+  # ─────────────────────────────────────────────
+  dast-zap:
+    name: "DAST: OWASP ZAP"
+    needs: [sast-semgrep]
+    if: ${{ github.event.inputs.run_dast != 'false' }}
+    uses: ./.github/workflows/dast-owasp-zap.yml
+    permissions:
+      contents: read
+      security-events: write
+      issues: write
+      actions: read
+
+  dast-w3af:
+    name: "DAST: w3af"
+    needs: [sast-semgrep]
+    if: ${{ github.event.inputs.run_dast != 'false' }}
+    uses: ./.github/workflows/dast-w3af.yml
+    permissions:
+      contents: read
+      actions: read
+
+  # ─────────────────────────────────────────────
+  # STAGE 3: SUMMARY — Aggregate all results
+  # ─────────────────────────────────────────────
+  pipeline-summary:
+    name: "Pipeline Summary"
+    runs-on: ubuntu-latest
+    needs: [sast-semgrep, sast-sonarcloud, dast-zap, dast-w3af]
+    if: always()
+    permissions:
+      contents: write
+      actions: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download all scan artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: all-artifacts
+        continue-on-error: true
+
+      - name: Aggregate metrics into pipeline-summary.json
+        run: |
+          mkdir -p docs/data
+
+          python3 << 'PYEOF'
+          import json, os, glob, time
+
+          artifacts_dir = "all-artifacts"
+          summary = {
+              "pipeline_run_id": os.environ.get("GITHUB_RUN_ID", ""),
+              "pipeline_run_number": os.environ.get("GITHUB_RUN_NUMBER", ""),
+              "commit": os.environ.get("GITHUB_SHA", ""),
+              "ref": os.environ.get("GITHUB_REF", ""),
+              "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+              "repository": "https://github.com/Meghana-Kalwal/DVWA",
+              "tools": {}
+          }
+
+          tool_files = {
+              "semgrep": "semgrep-metrics.json",
+              "sonarcloud": "sonarcloud-metrics.json",
+              "owasp_zap": "zap-metrics.json",
+              "w3af": "w3af-metrics.json"
+          }
+
+          for tool, filename in tool_files.items():
+              matches = glob.glob(f"{artifacts_dir}/**/{filename}", recursive=True)
+              if matches:
+                  try:
+                      with open(matches[0]) as f:
+                          summary["tools"][tool] = json.load(f)
+                      print(f"✅ Loaded metrics for {tool}")
+                  except Exception as e:
+                      print(f"⚠️ Could not parse {tool} metrics: {e}")
+                      summary["tools"][tool] = {"error": str(e)}
+              else:
+                  print(f"⚠️ No metrics file found for {tool}")
+                  summary["tools"][tool] = {"status": "not_found"}
+
+          # Compute comparison stats
+          total_findings = 0
+          ttd_data = {}
+          for tool, data in summary["tools"].items():
+              if isinstance(data, dict):
+                  total_findings += data.get("total_findings", 0)
+                  if "ttd_seconds" in data:
+                      ttd_data[tool] = data["ttd_seconds"]
+
+          summary["aggregated"] = {
+              "total_findings_all_tools": total_findings,
+              "ttd_by_tool_seconds": ttd_data,
+              "fastest_tool": min(ttd_data, key=ttd_data.get) if ttd_data else "N/A",
+              "slowest_tool": max(ttd_data, key=ttd_data.get) if ttd_data else "N/A"
+          }
+
+          with open("docs/data/pipeline-summary.json", "w") as f:
+              json.dump(summary, f, indent=2)
+          print("✅ Pipeline summary written to docs/data/pipeline-summary.json")
+          print(json.dumps(summary["aggregated"], indent=2))
+          PYEOF
+
+      - name: Upload pipeline summary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pipeline-summary-${{ github.run_id }}
+          path: docs/data/pipeline-summary.json
+          retention-days: 90
+
+      - name: Commit updated metrics to docs/data
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add docs/data/pipeline-summary.json
+          git diff --staged --quiet || git commit -m "📊 Update pipeline scan metrics [skip ci]"
+          git push || echo "Push skipped (nothing to commit or permission denied)"
+        continue-on-error: true
+
+      - name: Print pipeline summary
+        run: |
+          echo "## 🔐 Security Pipeline — Complete Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Pipeline Status" >> $GITHUB_STEP_SUMMARY
+          echo "| Stage | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Semgrep SAST | ${{ needs.sast-semgrep.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| SonarCloud SAST | ${{ needs.sast-sonarcloud.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| OWASP ZAP DAST | ${{ needs.dast-zap.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| w3af DAST | ${{ needs.dast-w3af.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "📊 Full metrics available in the **pipeline-summary** artifact" >> $GITHUB_STEP_SUMMARY
+          echo "🌐 Live dashboard: https://meghana-kalwal.github.io/DVWA" >> $GITHUB_STEP_SUMMARY

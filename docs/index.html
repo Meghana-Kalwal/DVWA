@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DevSecOps Dashboard — DVWA Vulnerability Detection</title>
+  <meta name="description" content="Real-time security monitoring dashboard comparing SAST and DAST tools (Semgrep, SonarCloud, OWASP ZAP, w3af) on DVWA vulnerabilities detected via GitHub Actions CI/CD pipeline." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════
+     NAVIGATION
+════════════════════════════════════════ -->
+<nav class="navbar" id="navbar">
+  <div class="nav-brand">
+    <span class="nav-icon">🔐</span>
+    <span class="nav-title">DevSecOps Monitor</span>
+  </div>
+  <ul class="nav-links" id="navLinks">
+    <li><a href="#hero" class="nav-link">Home</a></li>
+    <li><a href="#pipeline-status" class="nav-link">Pipeline</a></li>
+    <li><a href="#comparison" class="nav-link">Comparison</a></li>
+    <li><a href="#ttd-chart" class="nav-link">TTD</a></li>
+    <li><a href="#heatmap" class="nav-link">Heatmap</a></li>
+    <li><a href="#accuracy" class="nav-link">Accuracy</a></li>
+    <li><a href="#verdict" class="nav-link">Verdict</a></li>
+  </ul>
+  <div class="nav-status" id="navStatus">
+    <span class="pulse-dot" id="pulseDot"></span>
+    <span id="navStatusText">Connecting…</span>
+  </div>
+</nav>
+
+<!-- ═══════════════════════════════════════
+     HERO
+════════════════════════════════════════ -->
+<section id="hero" class="hero">
+  <canvas id="matrixCanvas"></canvas>
+  <div class="hero-content">
+    <div class="hero-badge" id="heroBadge">
+      <span class="badge-dot"></span>
+      <span>Live CI/CD Monitoring</span>
+    </div>
+    <h1 class="hero-title">
+      Detecting Vulnerabilities<br/>
+      <span class="gradient-text">in CI/CD Pipelines</span>
+    </h1>
+    <p class="hero-subtitle">
+      Comparing <strong>SAST</strong> (Semgrep · SonarCloud) and <strong>DAST</strong> (OWASP ZAP · w3af) tools<br/>
+      against <strong>DVWA</strong> — Damn Vulnerable Web Application — via GitHub Actions
+    </p>
+    <div class="hero-stats" id="heroStats">
+      <div class="hero-stat">
+        <span class="hero-stat-num" data-target="27" id="statUnique">0</span>
+        <span class="hero-stat-label">Confirmed Vulns</span>
+      </div>
+      <div class="hero-stat">
+        <span class="hero-stat-num" data-target="4" id="statTools">0</span>
+        <span class="hero-stat-label">Security Tools</span>
+      </div>
+      <div class="hero-stat">
+        <span class="hero-stat-num" data-target="81" id="statFindings">0</span>
+        <span class="hero-stat-label">Total Findings</span>
+      </div>
+      <div class="hero-stat">
+        <span class="hero-stat-num" id="statPipeline">—</span>
+        <span class="hero-stat-label">Pipeline Runs</span>
+      </div>
+    </div>
+    <div class="hero-cta">
+      <a href="#pipeline-status" class="btn-primary">View Live Results</a>
+      <a href="https://github.com/Meghana-Kalwal/DVWA/actions" target="_blank" class="btn-secondary">GitHub Actions ↗</a>
+    </div>
+  </div>
+  <div class="hero-scroll-hint">
+    <span>Scroll to explore</span>
+    <div class="scroll-arrow"></div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════
+     PIPELINE STATUS
+════════════════════════════════════════ -->
+<section id="pipeline-status" class="section">
+  <div class="container">
+    <div class="section-header">
+      <span class="section-tag">Live</span>
+      <h2 class="section-title">Pipeline Status</h2>
+      <p class="section-sub">Real-time GitHub Actions workflow runs — auto-refreshed every 30 seconds</p>
+    </div>
+    <div class="pipeline-grid" id="pipelineGrid">
+      <!-- Populated by script.js -->
+      <div class="pipeline-card skeleton" id="wf-semgrep">
+        <div class="wf-icon">⚡</div>
+        <div class="wf-info">
+          <div class="wf-name">Semgrep SAST</div>
+          <div class="wf-status-pill" id="pill-semgrep">Loading…</div>
+        </div>
+        <div class="wf-meta" id="meta-semgrep">—</div>
+      </div>
+      <div class="pipeline-card skeleton" id="wf-sonarcloud">
+        <div class="wf-icon">☁️</div>
+        <div class="wf-info">
+          <div class="wf-name">SonarCloud SAST</div>
+          <div class="wf-status-pill" id="pill-sonarcloud">Loading…</div>
+        </div>
+        <div class="wf-meta" id="meta-sonarcloud">—</div>
+      </div>
+      <div class="pipeline-card skeleton" id="wf-zap">
+        <div class="wf-icon">🕷️</div>
+        <div class="wf-info">
+          <div class="wf-name">OWASP ZAP DAST</div>
+          <div class="wf-status-pill" id="pill-zap">Loading…</div>
+        </div>
+        <div class="wf-meta" id="meta-zap">—</div>
+      </div>
+      <div class="pipeline-card skeleton" id="wf-w3af">
+        <div class="wf-icon">🔓</div>
+        <div class="wf-info">
+          <div class="wf-name">w3af DAST</div>
+          <div class="wf-status-pill" id="pill-w3af">Loading…</div>
+        </div>
+        <div class="wf-meta" id="meta-w3af">—</div>
+      </div>
+      <div class="pipeline-card skeleton pipeline-card--master" id="wf-pipeline">
+        <div class="wf-icon">🔐</div>
+        <div class="wf-info">
+          <div class="wf-name">Security Pipeline (Master)</div>
+          <div class="wf-status-pill" id="pill-pipeline">Loading…</div>
+        </div>
+        <div class="wf-meta" id="meta-pipeline">—</div>
+      </div>
+    </div>
+    <div class="refresh-info">
+      <span class="refresh-dot"></span>
+      Auto-refresh in <span id="refreshCountdown">30</span>s &nbsp;|&nbsp;
+      <a href="https://github.com/Meghana-Kalwal/DVWA/actions" target="_blank">View all runs ↗</a>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════
+     VULNERABILITY COMPARISON
+════════════════════════════════════════ -->
+<section id="comparison" class="section section--dark">
+  <div class="container">
+    <div class="section-header">
+      <span class="section-tag">Analysis</span>
+      <h2 class="section-title">Vulnerability Comparison</h2>
+      <p class="section-sub">Number of vulnerabilities detected by each tool, broken down by severity</p>
+    </div>
+    <div class="filter-bar">
+      <button class="filter-btn active" data-filter="all" id="filter-all">All Tools</button>
+      <button class="filter-btn" data-filter="SAST" id="filter-sast">SAST Only</button>
+      <button class="filter-btn" data-filter="DAST" id="filter-dast">DAST Only</button>
+    </div>
+    <div class="tool-cards" id="toolCards">
+      <!-- Populated by script.js from sample-metrics.json -->
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════
+     TTD CHART
+════════════════════════════════════════ -->
+<section id="ttd-chart" class="section">
+  <div class="container">
+    <div class="section-header">
+      <span class="section-tag">Performance</span>
+      <h2 class="section-title">Time to Detect (TTD)</h2>
+      <p class="section-sub">How long each tool takes to complete its scan — lower is faster</p>
+    </div>
+    <div class="ttd-wrapper">
+      <div class="ttd-bars" id="ttdBars">
+        <!-- Populated by script.js -->
+      </div>
+      <div class="ttd-legend">
+        <div class="ttd-legend-item"><span class="dot dot--sast"></span> SAST Tool</div>
+        <div class="ttd-legend-item"><span class="dot dot--dast"></span> DAST Tool</div>
+        <div class="ttd-legend-item"><span class="dot dot--best"></span> Best in category</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════
+     VULNERABILITY TYPE HEATMAP
+════════════════════════════════════════ -->
+<section id="heatmap" class="section section--dark">
+  <div class="container">
+    <div class="section-header">
+      <span class="section-tag">Coverage</span>
+      <h2 class="section-title">Vulnerability Type Coverage</h2>
+      <p class="section-sub">Which tools detect which vulnerability classes in DVWA</p>
+    </div>
+    <div class="heatmap-container">
+      <div class="heatmap-table-wrapper">
+        <table class="heatmap-table" id="heatmapTable">
+          <thead>
+            <tr>
+              <th>Vulnerability Type</th>
+              <th><span class="tool-th sast">⚡ Semgrep</span></th>
+              <th><span class="tool-th sast">☁️ SonarCloud</span></th>
+              <th><span class="tool-th dast">🕷️ OWASP ZAP</span></th>
+              <th><span class="tool-th dast">🔓 w3af</span></th>
+            </tr>
+          </thead>
+          <tbody id="heatmapBody">
+            <!-- Populated by script.js -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════
+     ACCURACY / FP / FN ANALYSIS
+════════════════════════════════════════ -->
+<section id="accuracy" class="section">
+  <div class="container">
+    <div class="section-header">
+      <span class="section-tag">Accuracy</span>
+      <h2 class="section-title">False Positive / Negative Analysis</h2>
+      <p class="section-sub">Precision, Recall and F1 scores — higher is better</p>
+    </div>
+    <div class="accuracy-table-wrapper">
+      <table class="accuracy-table" id="accuracyTable">
+        <thead>
+          <tr>
+            <th>Tool</th>
+            <th>Type</th>
+            <th>Total Findings</th>
+            <th>False Positives</th>
+            <th>False Negatives</th>
+            <th>Precision</th>
+            <th>Recall</th>
+            <th>F1 Score</th>
+            <th>Rating</th>
+          </tr>
+        </thead>
+        <tbody id="accuracyBody">
+          <!-- Populated by script.js -->
+        </tbody>
+      </table>
+    </div>
+    <div class="formula-box">
+      <div class="formula-title">📐 Formulas Used</div>
+      <div class="formula-row">
+        <span class="mono">Precision = TP / (TP + FP)</span>
+        <span class="mono">Recall = TP / (TP + FN)</span>
+        <span class="mono">F1 = 2 × (Precision × Recall) / (Precision + Recall)</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════
+     TOOL VERDICT
+════════════════════════════════════════ -->
+<section id="verdict" class="section section--dark">
+  <div class="container">
+    <div class="section-header">
+      <span class="section-tag">Verdict</span>
+      <h2 class="section-title">Tool Recommendations</h2>
+      <p class="section-sub">Final ranking based on detection rate, TTD, accuracy, and ease of integration</p>
+    </div>
+    <div class="verdict-grid">
+      <div class="verdict-card verdict-winner" id="verdictSAST">
+        <div class="verdict-crown">👑</div>
+        <div class="verdict-badge">Best SAST Tool</div>
+        <div class="verdict-tool-name" id="bestSASTName">Semgrep</div>
+        <div class="verdict-scores" id="bestSASTScores">
+          <div class="vscore"><span>F1 Score</span><strong>0.943</strong></div>
+          <div class="vscore"><span>TTD</span><strong>167s</strong></div>
+          <div class="vscore"><span>Findings</span><strong>26</strong></div>
+        </div>
+        <p class="verdict-reason" id="bestSASTReason">Highest F1 score (0.943), fastest SAST scan, PHP-native rulesets, zero token required</p>
+        <div class="verdict-bar-wrap">
+          <div class="verdict-label">Overall Score</div>
+          <div class="verdict-bar"><div class="verdict-fill" data-width="94" style="width:0%"></div></div>
+          <span class="verdict-pct">94%</span>
+        </div>
+      </div>
+
+      <div class="verdict-card verdict-runner" id="verdictSASTRunner">
+        <div class="verdict-badge">SAST Runner-Up</div>
+        <div class="verdict-tool-name">SonarCloud</div>
+        <div class="verdict-scores">
+          <div class="vscore"><span>F1 Score</span><strong>0.809</strong></div>
+          <div class="vscore"><span>TTD</span><strong>312s</strong></div>
+          <div class="vscore"><span>Findings</span><strong>19</strong></div>
+        </div>
+        <p class="verdict-reason">Rich dashboard, code smell detection & quality gate. Better for enterprise teams needing IDE integrations.</p>
+        <div class="verdict-bar-wrap">
+          <div class="verdict-label">Overall Score</div>
+          <div class="verdict-bar"><div class="verdict-fill verdict-fill--runner" data-width="78" style="width:0%"></div></div>
+          <span class="verdict-pct">78%</span>
+        </div>
+      </div>
+
+      <div class="verdict-card verdict-winner" id="verdictDAST">
+        <div class="verdict-crown">👑</div>
+        <div class="verdict-badge">Best DAST Tool</div>
+        <div class="verdict-tool-name" id="bestDASTName">OWASP ZAP</div>
+        <div class="verdict-scores" id="bestDASTScores">
+          <div class="vscore"><span>F1 Score</span><strong>0.898</strong></div>
+          <div class="vscore"><span>TTD</span><strong>21m</strong></div>
+          <div class="vscore"><span>Findings</span><strong>22</strong></div>
+        </div>
+        <p class="verdict-reason" id="bestDASTReason">Highest precision (0.88) among DAST tools, strongest reporting, active community maintained</p>
+        <div class="verdict-bar-wrap">
+          <div class="verdict-label">Overall Score</div>
+          <div class="verdict-bar"><div class="verdict-fill" data-width="89" style="width:0%"></div></div>
+          <span class="verdict-pct">89%</span>
+        </div>
+      </div>
+
+      <div class="verdict-card verdict-runner" id="verdictDASTRunner">
+        <div class="verdict-badge">DAST Runner-Up</div>
+        <div class="verdict-tool-name">w3af</div>
+        <div class="verdict-scores">
+          <div class="vscore"><span>F1 Score</span><strong>0.737</strong></div>
+          <div class="vscore"><span>TTD</span><strong>35m</strong></div>
+          <div class="vscore"><span>Findings</span><strong>14</strong></div>
+        </div>
+        <p class="verdict-reason">Catches OS commanding & file inclusion missed by ZAP, but slowest overall and highest false negatives.</p>
+        <div class="verdict-bar-wrap">
+          <div class="verdict-label">Overall Score</div>
+          <div class="verdict-bar"><div class="verdict-fill verdict-fill--runner" data-width="68" style="width:0%"></div></div>
+          <span class="verdict-pct">68%</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Recommended Pipeline -->
+    <div class="recommended-pipeline">
+      <h3>🚀 Recommended CI/CD Security Framework</h3>
+      <div class="pipeline-flow">
+        <div class="pf-step">
+          <div class="pf-icon">📝</div>
+          <div class="pf-label">Code Push</div>
+        </div>
+        <div class="pf-arrow">→</div>
+        <div class="pf-step pf-active">
+          <div class="pf-icon">⚡</div>
+          <div class="pf-label">Semgrep SAST</div>
+          <div class="pf-sub">~3 mins</div>
+        </div>
+        <div class="pf-arrow">→</div>
+        <div class="pf-step pf-active">
+          <div class="pf-icon">🕷️</div>
+          <div class="pf-label">OWASP ZAP</div>
+          <div class="pf-sub">~21 mins</div>
+        </div>
+        <div class="pf-arrow">→</div>
+        <div class="pf-step pf-active">
+          <div class="pf-icon">☁️</div>
+          <div class="pf-label">SonarCloud</div>
+          <div class="pf-sub">Quality Gate</div>
+        </div>
+        <div class="pf-arrow">→</div>
+        <div class="pf-step">
+          <div class="pf-icon">🚀</div>
+          <div class="pf-label">Deploy</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════
+     ABOUT DVWA
+════════════════════════════════════════ -->
+<section id="about" class="section">
+  <div class="container">
+    <div class="section-header">
+      <span class="section-tag">Target</span>
+      <h2 class="section-title">About DVWA</h2>
+    </div>
+    <div class="about-grid">
+      <div class="about-card">
+        <div class="about-icon">🎯</div>
+        <h3>What is DVWA?</h3>
+        <p>Damn Vulnerable Web Application (DVWA) is an intentionally vulnerable PHP/MySQL web application designed for security professionals to practice their skills legally in a controlled environment.</p>
+      </div>
+      <div class="about-card">
+        <div class="about-icon">🐛</div>
+        <h3>Known Vulnerabilities</h3>
+        <ul class="vuln-list" id="dvwaVulnList">
+          <li>SQL Injection</li>
+          <li>XSS (Reflected, Stored, DOM)</li>
+          <li>Command Injection</li>
+          <li>File Inclusion (LFI/RFI)</li>
+          <li>File Upload Bypass</li>
+          <li>CSRF</li>
+          <li>Brute Force</li>
+          <li>Insecure CAPTCHA</li>
+          <li>Hardcoded Credentials</li>
+          <li>Security Misconfigurations</li>
+        </ul>
+      </div>
+      <div class="about-card">
+        <div class="about-icon">🔗</div>
+        <h3>Project Links</h3>
+        <div class="link-list">
+          <a href="https://github.com/Meghana-Kalwal/DVWA" target="_blank" class="link-item">📁 DVWA Fork (Source Code)</a>
+          <a href="https://github.com/Meghana-Kalwal/DVWA/actions" target="_blank" class="link-item">⚙️ GitHub Actions Workflows</a>
+          <a href="https://github.com/Meghana-Kalwal/DVWA/security" target="_blank" class="link-item">🛡️ Security Alerts (SARIF)</a>
+          <a href="https://sonarcloud.io/project/overview?id=Meghana-Kalwal_DVWA" target="_blank" class="link-item">☁️ SonarCloud Dashboard</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════
+     FOOTER
+════════════════════════════════════════ -->
+<footer class="footer">
+  <div class="container">
+    <div class="footer-content">
+      <div class="footer-brand">🔐 DevSecOps Monitor</div>
+      <div class="footer-text">
+        Built for the <strong>DVWA Vulnerability Detection</strong> research project.<br/>
+        By <a href="https://github.com/Meghana-Kalwal" target="_blank">Meghana Kalwal</a> · Powered by GitHub Actions
+      </div>
+      <div class="footer-links">
+        <a href="https://github.com/Meghana-Kalwal/DVWA" target="_blank">GitHub</a>
+        <a href="https://github.com/Meghana-Kalwal/DVWA/actions" target="_blank">Actions</a>
+        <a href="https://owasp.org/www-project-dvwa/" target="_blank">OWASP DVWA</a>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<script src="script.js"></script>
+</body>
+</html>

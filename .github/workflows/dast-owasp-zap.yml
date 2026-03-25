@@ -1,0 +1,190 @@
+name: "DAST - OWASP ZAP"
+
+on:
+  push:
+    branches: ["master", "main"]
+  pull_request:
+    branches: ["master", "main"]
+  workflow_dispatch: {}
+  workflow_call: {}
+  schedule:
+    - cron: "0 3 * * *"
+
+jobs:
+  zap_scan:
+    name: "OWASP ZAP Full Scan"
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+      issues: write
+      actions: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Record scan start time
+        id: start_time
+        run: |
+          START=$(date +%s)
+          echo "start=$START" >> $GITHUB_OUTPUT
+          echo "start_human=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $GITHUB_OUTPUT
+          echo "📊 OWASP ZAP scan started at: $(date -u)"
+
+      - name: Start DVWA via Docker Compose
+        run: |
+          docker compose up -d
+          echo "⏳ Waiting for DVWA and MariaDB to be ready..."
+
+      - name: Wait for DVWA to be healthy
+        run: |
+          MAX_WAIT=120
+          WAITED=0
+          until curl -s -o /dev/null -w "%{http_code}" http://localhost:4280/login.php | grep -q "200\|302"; do
+            if [ $WAITED -ge $MAX_WAIT ]; then
+              echo "❌ DVWA did not start within ${MAX_WAIT}s"
+              docker compose logs
+              exit 1
+            fi
+            echo "⏳ Waiting for DVWA... ($WAITED/${MAX_WAIT}s)"
+            sleep 5
+            WAITED=$((WAITED + 5))
+          done
+          echo "✅ DVWA is up and responding on http://localhost:4280"
+
+      - name: Setup DVWA database
+        run: |
+          sleep 10
+          curl -s -c /tmp/dvwa-cookies.txt \
+            -d "username=admin&password=password&Login=Login&user_token=" \
+            http://localhost:4280/login.php > /dev/null || true
+          curl -s -b /tmp/dvwa-cookies.txt \
+            "http://localhost:4280/setup.php?dbInit=true" > /dev/null || true
+          echo "✅ DVWA DB setup attempted"
+
+      - name: Run OWASP ZAP Full Scan
+        id: zap_scan
+        uses: zaproxy/action-full-scan@v0.12.0
+        with:
+          target: "http://localhost:4280"
+          rules_file_name: ".zap/rules.tsv"
+          cmd_options: "-a -j -m 5 -T 60"
+          allow_issue_writing: false
+          artifact_name: "zap-scan-report"
+        continue-on-error: true
+
+      - name: Record scan end time
+        id: end_time
+        run: |
+          END=$(date +%s)
+          START=${{ steps.start_time.outputs.start }}
+          TTD=$((END - START))
+          echo "end=$END" >> $GITHUB_OUTPUT
+          echo "ttd=$TTD" >> $GITHUB_OUTPUT
+          echo "end_human=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $GITHUB_OUTPUT
+          echo "⏱️  ZAP TTD: ${TTD} seconds"
+
+      - name: Parse ZAP JSON report
+        id: parse_zap
+        run: |
+          TOTAL=0
+          HIGH=0
+          MEDIUM=0
+          LOW=0
+          if [ -f report_json.json ]; then
+            TOTAL=$(python3 -c "
+          import json
+          try:
+              data = json.load(open('report_json.json'))
+              sites = data.get('site', [])
+              if isinstance(sites, dict): sites = [sites]
+              total = sum(len(s.get('alerts', [])) for s in sites)
+              print(total)
+          except: print(0)
+          ")
+            HIGH=$(python3 -c "
+          import json
+          try:
+              data = json.load(open('report_json.json'))
+              sites = data.get('site', [])
+              if isinstance(sites, dict): sites = [sites]
+              count = sum(1 for s in sites for a in s.get('alerts', []) if str(a.get('riskcode','')) == '3')
+              print(count)
+          except: print(0)
+          ")
+            MEDIUM=$(python3 -c "
+          import json
+          try:
+              data = json.load(open('report_json.json'))
+              sites = data.get('site', [])
+              if isinstance(sites, dict): sites = [sites]
+              count = sum(1 for s in sites for a in s.get('alerts', []) if str(a.get('riskcode','')) == '2')
+              print(count)
+          except: print(0)
+          ")
+            LOW=$(python3 -c "
+          import json
+          try:
+              data = json.load(open('report_json.json'))
+              sites = data.get('site', [])
+              if isinstance(sites, dict): sites = [sites]
+              count = sum(1 for s in sites for a in s.get('alerts', []) if str(a.get('riskcode','')) == '1')
+              print(count)
+          except: print(0)
+          ")
+          fi
+          echo "total=$TOTAL" >> $GITHUB_OUTPUT
+          echo "high=$HIGH" >> $GITHUB_OUTPUT
+          echo "medium=$MEDIUM" >> $GITHUB_OUTPUT
+          echo "low=$LOW" >> $GITHUB_OUTPUT
+          echo "📊 ZAP findings — Total: $TOTAL | High: $HIGH | Medium: $MEDIUM | Low: $LOW"
+
+      - name: Generate ZAP metrics JSON
+        run: |
+          cat > zap-metrics.json << EOF
+          {
+            "tool": "owasp_zap",
+            "tool_type": "DAST",
+            "target": "http://localhost:4280",
+            "scan_start": "${{ steps.start_time.outputs.start_human }}",
+            "scan_end": "${{ steps.end_time.outputs.end_human }}",
+            "ttd_seconds": ${{ steps.end_time.outputs.ttd }},
+            "total_findings": ${{ steps.parse_zap.outputs.total }},
+            "high": ${{ steps.parse_zap.outputs.high }},
+            "medium": ${{ steps.parse_zap.outputs.medium }},
+            "low": ${{ steps.parse_zap.outputs.low }},
+            "scan_mode": "full-scan",
+            "run_id": "${{ github.run_id }}",
+            "commit": "${{ github.sha }}"
+          }
+          EOF
+          echo "=== ZAP METRICS ==="
+          cat zap-metrics.json
+
+      - name: Upload ZAP metrics artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: zap-metrics-${{ github.run_id }}
+          path: |
+            zap-metrics.json
+            report_html.html
+            report_json.json
+          retention-days: 30
+
+      - name: Stop DVWA containers
+        if: always()
+        run: docker compose down
+
+      - name: Print summary
+        run: |
+          echo "## 🕷️ OWASP ZAP DAST Results" >> $GITHUB_STEP_SUMMARY
+          echo "| Metric | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Target | http://localhost:4280 (DVWA) |" >> $GITHUB_STEP_SUMMARY
+          echo "| Total Findings | ${{ steps.parse_zap.outputs.total }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| High Risk | ${{ steps.parse_zap.outputs.high }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Medium Risk | ${{ steps.parse_zap.outputs.medium }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Low Risk | ${{ steps.parse_zap.outputs.low }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Time to Detect | ${{ steps.end_time.outputs.ttd }} seconds |" >> $GITHUB_STEP_SUMMARY

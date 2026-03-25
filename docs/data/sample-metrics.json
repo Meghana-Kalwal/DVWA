@@ -1,0 +1,160 @@
+{
+  "generated_at": "2026-03-25T04:22:00Z",
+  "note": "Sample/demo data. Live data auto-populated by security-pipeline.yml after each scan.",
+  "tools": {
+    "semgrep": {
+      "tool": "semgrep",
+      "tool_type": "SAST",
+      "tool_label": "Semgrep",
+      "scan_start": "2026-03-25T04:00:00Z",
+      "scan_end": "2026-03-25T04:02:47Z",
+      "ttd_seconds": 167,
+      "total_findings": 26,
+      "critical": 9,
+      "high": 11,
+      "medium": 4,
+      "low": 2,
+      "false_positives": 2,
+      "false_negatives": 1,
+      "precision": 0.923,
+      "recall": 0.963,
+      "f1_score": 0.943,
+      "rulesets": ["p/php", "p/owasp-top-ten", "p/security-audit", "p/secrets"],
+      "vuln_types": {
+        "sql_injection": 5,
+        "xss": 6,
+        "command_injection": 3,
+        "file_inclusion": 2,
+        "csrf": 2,
+        "hardcoded_secrets": 4,
+        "insecure_deserialization": 1,
+        "path_traversal": 2,
+        "xxe": 1
+      },
+      "verdict": "Best SAST Tool",
+      "verdict_reason": "Highest F1 score (0.943), fastest SAST scan, PHP-native rulesets, zero token required"
+    },
+    "sonarcloud": {
+      "tool": "sonarcloud",
+      "tool_type": "SAST",
+      "tool_label": "SonarCloud",
+      "scan_start": "2026-03-25T04:00:00Z",
+      "scan_end": "2026-03-25T04:05:12Z",
+      "ttd_seconds": 312,
+      "total_findings": 19,
+      "critical": 4,
+      "high": 7,
+      "medium": 5,
+      "low": 3,
+      "false_positives": 5,
+      "false_negatives": 4,
+      "precision": 0.792,
+      "recall": 0.826,
+      "f1_score": 0.809,
+      "dashboard_url": "https://sonarcloud.io/project/overview?id=Meghana-Kalwal_DVWA",
+      "vuln_types": {
+        "sql_injection": 3,
+        "xss": 4,
+        "command_injection": 2,
+        "file_inclusion": 1,
+        "csrf": 1,
+        "hardcoded_secrets": 3,
+        "code_smells": 5
+      },
+      "verdict": "Solid SAST Option",
+      "verdict_reason": "Good code quality metrics & dashboard, but slower (312s) and more false positives than Semgrep"
+    },
+    "owasp_zap": {
+      "tool": "owasp_zap",
+      "tool_type": "DAST",
+      "tool_label": "OWASP ZAP",
+      "target": "http://localhost:4280",
+      "scan_start": "2026-03-25T04:08:00Z",
+      "scan_end": "2026-03-25T04:29:31Z",
+      "ttd_seconds": 1291,
+      "total_findings": 22,
+      "high": 8,
+      "medium": 9,
+      "low": 5,
+      "false_positives": 3,
+      "false_negatives": 2,
+      "precision": 0.880,
+      "recall": 0.917,
+      "f1_score": 0.898,
+      "scan_mode": "full-scan",
+      "vuln_types": {
+        "sql_injection": 5,
+        "xss": 6,
+        "csrf": 3,
+        "security_headers_missing": 4,
+        "cookie_without_httponly": 2,
+        "open_redirect": 1,
+        "directory_browsing": 1
+      },
+      "verdict": "Best DAST Tool",
+      "verdict_reason": "Highest precision (0.88) among DAST tools, strongest reporting, active community maintained"
+    },
+    "w3af": {
+      "tool": "w3af",
+      "tool_type": "DAST",
+      "tool_label": "w3af",
+      "target": "http://localhost:4280",
+      "scan_start": "2026-03-25T04:08:00Z",
+      "scan_end": "2026-03-25T04:43:17Z",
+      "ttd_seconds": 2117,
+      "total_findings": 14,
+      "high": 5,
+      "medium": 6,
+      "low": 3,
+      "false_positives": 4,
+      "false_negatives": 6,
+      "precision": 0.778,
+      "recall": 0.700,
+      "f1_score": 0.737,
+      "scan_status": "completed",
+      "plugins": ["sqli", "xss", "os_commanding", "lfi", "rfi", "file_upload", "csrf", "xpath", "xxe"],
+      "vuln_types": {
+        "sql_injection": 3,
+        "xss": 4,
+        "os_commanding": 2,
+        "lfi": 2,
+        "file_upload": 1,
+        "csrf": 2
+      },
+      "note": "w3af may timeout on large applications; results represent partial or full scan",
+      "verdict": "Thorough but Slow",
+      "verdict_reason": "Slowest tool (35min), higher false negative rate, but catches OS commanding & file inclusion missed by ZAP"
+    }
+  },
+  "aggregated": {
+    "total_findings_all_tools": 81,
+    "unique_confirmed_vulnerabilities": 27,
+    "ttd_by_tool_seconds": {
+      "semgrep": 167,
+      "sonarcloud": 312,
+      "owasp_zap": 1291,
+      "w3af": 2117
+    },
+    "fastest_tool": "semgrep",
+    "slowest_tool": "w3af",
+    "best_sast": "semgrep",
+    "best_dast": "owasp_zap",
+    "dvwa_known_vulns": [
+      "SQL Injection", "XSS (Reflected)", "XSS (Stored)", "XSS (DOM)",
+      "Command Injection", "File Inclusion (LFI/RFI)", "File Upload",
+      "CSRF", "Insecure CAPTCHA", "Brute Force", "Weak Auth",
+      "Security Misconfigurations", "Hardcoded Credentials"
+    ]
+  },
+  "pipeline_runs": [
+    {
+      "run_number": 1,
+      "date": "2026-03-25T04:00:00Z",
+      "semgrep_findings": 26,
+      "sonarcloud_findings": 19,
+      "zap_findings": 22,
+      "w3af_findings": 14,
+      "status": "success"
+    }
+  ]
+}

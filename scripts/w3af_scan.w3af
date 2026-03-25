@@ -1,0 +1,30 @@
+set_output_plugin console
+console config output-console
+set verbose False
+back
+
+http-settings set timeout 30
+http-settings set max_requests_per_second 10
+
+plugins
+output html_file,xml_file
+output config html_file
+set output_file /tmp/w3af-output/w3af-report.html
+back
+output config xml_file
+set output_file /tmp/w3af-output/w3af-report.xml
+back
+
+crawl web_spider
+crawl config web_spider
+set only_forward False
+set follow_regex .*
+back
+
+audit sqli,xss,os_commanding,lfi,rfi,file_upload,csrf,xpath,xxe,phishing_vector
+grep private_ip,http_in_body,error_pages,path_disclosure,html_comments,meta_tags
+
+target
+set target http://localhost:4280/
+
+start

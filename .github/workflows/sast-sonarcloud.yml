@@ -1,0 +1,104 @@
+name: "SAST - SonarCloud"
+
+on:
+  push:
+    branches: ["master", "main"]
+  pull_request:
+    branches: ["master", "main"]
+  workflow_dispatch: {}
+  workflow_call: {}
+
+jobs:
+  sonarcloud:
+    name: "SonarCloud SAST Scan"
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Record scan start time
+        id: start_time
+        run: |
+          START=$(date +%s)
+          echo "start=$START" >> $GITHUB_OUTPUT
+          echo "start_human=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $GITHUB_OUTPUT
+          echo "📊 SonarCloud scan started at: $(date -u)"
+
+      - name: SonarCloud Scan
+        id: sonar_scan
+        uses: SonarSource/sonarcloud-github-action@master
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        with:
+          args: >
+            -Dsonar.organization=${{ secrets.SONAR_ORGANIZATION }}
+            -Dsonar.projectKey=${{ secrets.SONAR_PROJECT_KEY }}
+            -Dsonar.sources=.
+            -Dsonar.exclusions=vendor/**,docs/**,external/**,**/*.md,**/*.txt
+            -Dsonar.php.version=8
+            -Dsonar.sourceEncoding=UTF-8
+        continue-on-error: true
+
+      - name: Record scan end time
+        id: end_time
+        run: |
+          END=$(date +%s)
+          START=${{ steps.start_time.outputs.start }}
+          TTD=$((END - START))
+          echo "end=$END" >> $GITHUB_OUTPUT
+          echo "ttd=$TTD" >> $GITHUB_OUTPUT
+          echo "end_human=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $GITHUB_OUTPUT
+          echo "⏱️  SonarCloud TTD: ${TTD} seconds"
+
+      - name: Generate SonarCloud metrics JSON
+        run: |
+          # Check if sonar scan succeeded
+          SCAN_STATUS="${{ steps.sonar_scan.outcome }}"
+          if [ "$SCAN_STATUS" == "success" ]; then
+            STATUS="completed"
+          else
+            STATUS="failed_or_skipped"
+          fi
+
+          cat > sonarcloud-metrics.json << EOF
+          {
+            "tool": "sonarcloud",
+            "tool_type": "SAST",
+            "scan_start": "${{ steps.start_time.outputs.start_human }}",
+            "scan_end": "${{ steps.end_time.outputs.end_human }}",
+            "ttd_seconds": ${{ steps.end_time.outputs.ttd }},
+            "status": "$STATUS",
+            "dashboard_url": "https://sonarcloud.io/project/overview?id=${{ secrets.SONAR_PROJECT_KEY }}",
+            "note": "Detailed results visible in SonarCloud dashboard",
+            "run_id": "${{ github.run_id }}",
+            "commit": "${{ github.sha }}"
+          }
+          EOF
+          echo "=== SONARCLOUD METRICS ==="
+          cat sonarcloud-metrics.json
+
+      - name: Upload SonarCloud metrics artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sonarcloud-metrics-${{ github.run_id }}
+          path: sonarcloud-metrics.json
+          retention-days: 30
+
+      - name: Print summary
+        run: |
+          echo "## ☁️ SonarCloud SAST Results" >> $GITHUB_STEP_SUMMARY
+          echo "| Metric | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Scan Status | ${{ steps.sonar_scan.outcome }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Time to Detect | ${{ steps.end_time.outputs.ttd }} seconds |" >> $GITHUB_STEP_SUMMARY
+          echo "| Dashboard | [SonarCloud UI](https://sonarcloud.io/project/overview?id=${{ secrets.SONAR_PROJECT_KEY }}) |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "> **Note:** Add SONAR_TOKEN, SONAR_ORGANIZATION, SONAR_PROJECT_KEY to GitHub Secrets to activate." >> $GITHUB_STEP_SUMMARY

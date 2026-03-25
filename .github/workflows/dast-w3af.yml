@@ -1,0 +1,195 @@
+name: "DAST - w3af"
+
+on:
+  push:
+    branches: ["master", "main"]
+  workflow_dispatch: {}
+  workflow_call: {}
+  schedule:
+    - cron: "0 4 * * *"
+
+jobs:
+  w3af_scan:
+    name: "w3af DAST Scan"
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      actions: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Record scan start time
+        id: start_time
+        run: |
+          START=$(date +%s)
+          echo "start=$START" >> $GITHUB_OUTPUT
+          echo "start_human=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $GITHUB_OUTPUT
+          echo "📊 w3af scan started at: $(date -u)"
+
+      - name: Start DVWA via Docker Compose
+        run: |
+          docker compose up -d
+          echo "⏳ Waiting for DVWA and MariaDB..."
+
+      - name: Wait for DVWA to be healthy
+        run: |
+          MAX_WAIT=120
+          WAITED=0
+          until curl -s -o /dev/null -w "%{http_code}" http://localhost:4280/login.php | grep -q "200\|302"; do
+            if [ $WAITED -ge $MAX_WAIT ]; then
+              echo "❌ DVWA did not start in time"
+              docker compose logs
+              exit 1
+            fi
+            echo "⏳ ($WAITED/${MAX_WAIT}s)"
+            sleep 5
+            WAITED=$((WAITED + 5))
+          done
+          echo "✅ DVWA is ready at http://localhost:4280"
+
+      - name: Create w3af output directory
+        run: mkdir -p w3af-output
+
+      - name: Pull w3af Docker image
+        id: pull_w3af
+        run: |
+          docker pull andresriancho/w3af:latest --quiet || \
+          docker pull ghcr.io/andresriancho/w3af:latest --quiet || true
+          echo "pulled=true" >> $GITHUB_OUTPUT
+        continue-on-error: true
+
+      - name: Copy w3af scan script
+        run: |
+          cat > /tmp/w3af_scan.w3af << 'SCANSCRIPT'
+          set_output_plugin console
+          console config output-console
+          set verbose False
+          back
+
+          http-settings set timeout 30
+          http-settings set max_requests_per_second 10
+
+          plugins
+          output html_file,xml_file
+          output config html_file
+          set output_file /tmp/w3af-output/w3af-report.html
+          back
+          output config xml_file
+          set output_file /tmp/w3af-output/w3af-report.xml
+          back
+
+          crawl web_spider
+          crawl config web_spider
+          set only_forward False
+          set follow_regex .*
+          back
+
+          audit sqli,xss,os_commanding,lfi,rfi,file_upload,csrf,phishing_vector,xpath,xxe
+          grep private_ip,http_in_body,error_pages,path_disclosure,html_comments,meta_tags
+          bruteforce form_auth
+
+          target
+          set target http://localhost:4280/
+          set target_framework php
+
+          start
+          SCANSCRIPT
+
+          echo "✅ w3af scan script created"
+
+      - name: Run w3af scan
+        id: w3af_run
+        run: |
+          docker run --rm \
+            --network host \
+            -v /tmp/w3af_scan.w3af:/tmp/w3af_scan.w3af:ro \
+            -v /tmp/w3af-output:/tmp/w3af-output \
+            --timeout 1800 \
+            andresriancho/w3af:latest \
+            w3af_console -s /tmp/w3af_scan.w3af 2>&1 | tee w3af-console.log || \
+          echo "⚠️ w3af scan completed with non-zero exit (reports may still exist)"
+          cp -r /tmp/w3af-output/* ./w3af-output/ 2>/dev/null || true
+          echo "✅ w3af scan finished"
+        continue-on-error: true
+        timeout-minutes: 35
+
+      - name: Record scan end time
+        id: end_time
+        run: |
+          END=$(date +%s)
+          START=${{ steps.start_time.outputs.start }}
+          TTD=$((END - START))
+          echo "end=$END" >> $GITHUB_OUTPUT
+          echo "ttd=$TTD" >> $GITHUB_OUTPUT
+          echo "end_human=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $GITHUB_OUTPUT
+          echo "⏱️  w3af TTD: ${TTD} seconds"
+
+      - name: Parse w3af XML report
+        id: parse_w3af
+        run: |
+          TOTAL=0
+          if [ -f w3af-output/w3af-report.xml ]; then
+            TOTAL=$(python3 -c "
+          import xml.etree.ElementTree as ET
+          try:
+              tree = ET.parse('w3af-output/w3af-report.xml')
+              root = tree.getroot()
+              vulns = root.findall('.//vulnerability')
+              print(len(vulns))
+          except Exception as e:
+              print(0)
+          " 2>/dev/null || echo 0)
+          fi
+          echo "total=$TOTAL" >> $GITHUB_OUTPUT
+          echo "📊 w3af findings: $TOTAL"
+
+      - name: Generate w3af metrics JSON
+        run: |
+          W3AF_STATUS="${{ steps.w3af_run.outcome }}"
+          cat > w3af-metrics.json << EOF
+          {
+            "tool": "w3af",
+            "tool_type": "DAST",
+            "target": "http://localhost:4280/",
+            "scan_start": "${{ steps.start_time.outputs.start_human }}",
+            "scan_end": "${{ steps.end_time.outputs.end_human }}",
+            "ttd_seconds": ${{ steps.end_time.outputs.ttd }},
+            "total_findings": ${{ steps.parse_w3af.outputs.total }},
+            "scan_status": "$W3AF_STATUS",
+            "plugins": ["sqli", "xss", "os_commanding", "lfi", "rfi", "file_upload", "csrf", "xpath", "xxe"],
+            "note": "w3af may timeout on large applications; results represent partial or full scan",
+            "run_id": "${{ github.run_id }}",
+            "commit": "${{ github.sha }}"
+          }
+          EOF
+          echo "=== W3AF METRICS ==="
+          cat w3af-metrics.json
+
+      - name: Upload w3af artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: w3af-results-${{ github.run_id }}
+          path: |
+            w3af-output/
+            w3af-console.log
+            w3af-metrics.json
+          retention-days: 30
+
+      - name: Stop DVWA containers
+        if: always()
+        run: docker compose down
+
+      - name: Print summary
+        run: |
+          echo "## 🔓 w3af DAST Results" >> $GITHUB_STEP_SUMMARY
+          echo "| Metric | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Target | http://localhost:4280 (DVWA) |" >> $GITHUB_STEP_SUMMARY
+          echo "| Total Findings | ${{ steps.parse_w3af.outputs.total }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Scan Status | ${{ steps.w3af_run.outcome }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Time to Detect | ${{ steps.end_time.outputs.ttd }} seconds |" >> $GITHUB_STEP_SUMMARY
+          echo "| Plugins Used | sqli, xss, os_commanding, lfi, rfi, csrf, xpath, xxe |" >> $GITHUB_STEP_SUMMARY
