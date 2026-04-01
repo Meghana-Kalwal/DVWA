@@ -1,4 +1,4 @@
-name: Semgrep + SARIF Upload
+name: SAST + SARIF Upload
 
 on:
   push:
@@ -9,15 +9,24 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
+      - name: Checkout Code
         uses: actions/checkout@v3
 
-      - name: Run Semgrep
+      - name: Install Semgrep
+        run: pip install semgrep
+
+      - name: Run Semgrep Scan (Generate SARIF)
         run: |
-          pip install semgrep
           semgrep scan --config=auto --sarif --output=results.sarif
 
-      - name: Upload SARIF
-        uses: github/codeql-action/upload-sarif@v3
+      - name: Check file exists (DEBUG)
+        run: ls -l
+
+      - name: Upload SARIF File
+        uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: results.sarif
+
+
+
+
