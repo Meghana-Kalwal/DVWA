@@ -1,17 +1,23 @@
-name: Upload SARIF Report
+name: Semgrep + SARIF Upload
 
 on:
-  workflow_dispatch:
+  push:
+    branches: ["main"]
 
 jobs:
-  upload:
+  scan:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v3
 
-      - name: Upload SARIF file
+      - name: Run Semgrep
+        run: |
+          pip install semgrep
+          semgrep scan --config=auto --sarif --output=results.sarif
+
+      - name: Upload SARIF
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: results.sarif
