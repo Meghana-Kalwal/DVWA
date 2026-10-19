@@ -1,17 +1,17 @@
 {
-  "pipeline_run_id": "38222578732",
-  "pipeline_run_number": "36",
-  "commit": "65cfa0e3c24564219807c3901a1668cf350b2815",
+  "pipeline_run_id": "39213801058",
+  "pipeline_run_number": "37",
+  "commit": "6bd388d55827e2ea36ad96711a5e2df22f74a78a",
   "ref": "refs/heads/master",
-  "timestamp": "2026-10-12T08:22:38Z",
+  "timestamp": "2026-10-19T07:11:53Z",
   "repository": "https://github.com/Meghana-Kalwal/DVWA",
   "tools": {
     "semgrep": {
       "tool": "semgrep",
       "tool_type": "SAST",
-      "scan_start": "2026-10-12T08:16:40Z",
-      "scan_end": "2026-10-12T08:17:07Z",
-      "ttd_seconds": 27,
+      "scan_start": "2026-10-19T07:06:02Z",
+      "scan_end": "2026-10-19T07:06:30Z",
+      "ttd_seconds": 28,
       "total_findings": 109,
       "critical": 47,
       "high": 62,
@@ -21,43 +21,43 @@
         "p/security-audit",
         "p/secrets"
       ],
-      "run_id": "38222578732",
-      "commit": "65cfa0e3c24564219807c3901a1668cf350b2815"
+      "run_id": "39213801058",
+      "commit": "6bd388d55827e2ea36ad96711a5e2df22f74a78a"
     },
     "sonarcloud": {
       "tool": "sonarcloud",
       "tool_type": "SAST",
-      "scan_start": "2026-10-12T08:16:41Z",
-      "scan_end": "2026-10-12T08:16:52Z",
-      "ttd_seconds": 11,
+      "scan_start": "2026-10-19T07:06:01Z",
+      "scan_end": "2026-10-19T07:06:09Z",
+      "ttd_seconds": 8,
       "status": "failed_or_skipped",
       "dashboard_url": "https://sonarcloud.io/project/overview?id=",
       "note": "Detailed results visible in SonarCloud dashboard",
-      "run_id": "38222578732",
-      "commit": "65cfa0e3c24564219807c3901a1668cf350b2815"
+      "run_id": "39213801058",
+      "commit": "6bd388d55827e2ea36ad96711a5e2df22f74a78a"
     },
     "owasp_zap": {
       "tool": "owasp_zap",
       "tool_type": "DAST",
       "target": "http://localhost:4280",
-      "scan_start": "2026-10-12T08:17:25Z",
-      "scan_end": "2026-10-12T08:22:23Z",
-      "ttd_seconds": 298,
-      "total_findings": 39,
-      "high": 1,
+      "scan_start": "2026-10-19T07:06:47Z",
+      "scan_end": "2026-10-19T07:11:42Z",
+      "ttd_seconds": 295,
+      "total_findings": 40,
+      "high": 2,
       "medium": 10,
       "low": 12,
       "scan_mode": "full-scan",
-      "run_id": "38222578732",
-      "commit": "65cfa0e3c24564219807c3901a1668cf350b2815"
+      "run_id": "39213801058",
+      "commit": "6bd388d55827e2ea36ad96711a5e2df22f74a78a"
     },
     "w3af": {
       "tool": "w3af",
       "tool_type": "DAST",
       "target": "http://localhost:4280/",
-      "scan_start": "2026-10-12T08:17:22Z",
-      "scan_end": "2026-10-12T08:17:51Z",
-      "ttd_seconds": 29,
+      "scan_start": "2026-10-19T07:06:47Z",
+      "scan_end": "2026-10-19T07:07:05Z",
+      "ttd_seconds": 18,
       "total_findings": 0,
       "scan_status": "success",
       "plugins": [
@@ -72,17 +72,17 @@
         "xxe"
       ],
       "note": "w3af may timeout on large applications; results represent partial or full scan",
-      "run_id": "38222578732",
-      "commit": "65cfa0e3c24564219807c3901a1668cf350b2815"
+      "run_id": "39213801058",
+      "commit": "6bd388d55827e2ea36ad96711a5e2df22f74a78a"
     }
   },
   "aggregated": {
-    "total_findings_all_tools": 148,
+    "total_findings_all_tools": 149,
     "ttd_by_tool_seconds": {
-      "semgrep": 27,
-      "sonarcloud": 11,
-      "owasp_zap": 298,
-      "w3af": 29
+      "semgrep": 28,
+      "sonarcloud": 8,
+      "owasp_zap": 295,
+      "w3af": 18
     },
     "fastest_tool": "sonarcloud",
     "slowest_tool": "owasp_zap"
